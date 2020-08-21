@@ -76,12 +76,8 @@ namespace re_platform_fapp_adls_getjobcardhistory
                          
                         foreach (MyPoco entity in
                             await table.ExecuteQuerySegmentedAsync(rangeQuery, null))
-                        {
-                            if (entity.InvoiceAmount.ToString() != null || entity.InvoiceAmount.ToString() != string.Empty)
-                            {
-                                listOfObjects.Add(entity);
-
-                            }
+                        {                            
+                                listOfObjects.Add(entity);                            
                         }
                         jsonResult = JsonConvert.SerializeObject(listOfObjects);
                         //jsonResult = jsonResult.Replace("ActualDeliveryDateandTime", "InvoiceDate").Replace("InvoiceAmount", "BillAmount").Replace("InvoiceNumber", "ServiceInvoiceNum").Replace("StoreCode", "BrnchId").Replace("RegistrationNumber", "RegNo").Replace("PartitionKey", "ChassisNo");
