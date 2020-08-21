@@ -21,13 +21,13 @@ namespace re_platform_fapp_adls_getjobcardhistory
     public class MyPoco : TableEntity
     {
         public DateTime ActualDeliveryDateandTime { get; set; }
-       
+
         public double InvoiceAmount { get; set; }
-      
+
         public string InvoiceNumber { get; set; }
 
         public string RegistrationNumber { get; set; }
-       
+
         public string StoreCode { get; set; }
 
         public string UserId { get; set; }
@@ -35,6 +35,13 @@ namespace re_platform_fapp_adls_getjobcardhistory
         public string UserMobileNumber { get; set; }
 
 
+    }
+    public class HistoryJobLogs : TableEntity
+    {
+        public HistoryJobLogs() { }
+        public string Status { get; set; }
+
+        public string Message { get; set; }
     }
 
     public static class GetJobHistory
@@ -52,16 +59,21 @@ namespace re_platform_fapp_adls_getjobcardhistory
                 {
                     var jsonResult = string.Empty;
                     List<MyPoco> listOfObjects = new List<MyPoco>();
+                    CloudStorageAccount storageAccount = CloudStorageAccount.Parse("DefaultEndpointsProtocol=https;AccountName=redatalake;AccountKey=AnWrOm+WVdGEP3POg76d5eIoNaW676NCSiBsDdcmYw3R7Bz5+WkGNL63VQx5Zg4acw2qf4aEkzOfysYdkaFtxg==;EndpointSuffix=core.windows.net");
+                    CloudTableClient tableClient = storageAccount.CreateCloudTableClient();
+                    CloudTable table = tableClient.GetTableReference("HistoricalJobCard");
+                    CloudTable logTable = tableClient.GetTableReference("JobCardLogs");
                     var pooo = string.Empty;
                     try
                     {
-                        CloudStorageAccount storageAccount = CloudStorageAccount.Parse("DefaultEndpointsProtocol=https;AccountName=redatalake;AccountKey=AnWrOm+WVdGEP3POg76d5eIoNaW676NCSiBsDdcmYw3R7Bz5+WkGNL63VQx5Zg4acw2qf4aEkzOfysYdkaFtxg==;EndpointSuffix=core.windows.net");
-                        CloudTableClient tableClient = storageAccount.CreateCloudTableClient();
-                        CloudTable table = tableClient.GetTableReference("HistoricalJobCard");
+                        string val1 = TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, chassisNumber);
+                        string val2 = TableQuery.GenerateFilterCondition("InvoiceAmount", QueryComparisons.NotEqual, string.Empty);
 
-                        TableQuery<MyPoco> rangeQuery = new TableQuery<MyPoco>().Where(
-                                 TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, chassisNumber));
-
+                         TableQuery<MyPoco> rangeQuery = new TableQuery<MyPoco>().Where(TableQuery.CombineFilters(
+                              val1,
+                              TableOperators.And,
+                              val2));
+                         
                         foreach (MyPoco entity in
                             await table.ExecuteQuerySegmentedAsync(rangeQuery, null))
                         {
@@ -72,15 +84,25 @@ namespace re_platform_fapp_adls_getjobcardhistory
                             }
                         }
                         jsonResult = JsonConvert.SerializeObject(listOfObjects);
-                        jsonResult=jsonResult.Replace("ActualDeliveryDateandTime", "InvoiceDate").Replace("InvoiceAmount", "BillAmount").Replace("InvoiceNumber", "ServiceInvoiceNum").Replace("StoreCode", "BrnchId").Replace("RegistrationNumber", "RegNo").Replace("PartitionKey", "ChassisNo");
+                        //jsonResult = jsonResult.Replace("ActualDeliveryDateandTime", "InvoiceDate").Replace("InvoiceAmount", "BillAmount").Replace("InvoiceNumber", "ServiceInvoiceNum").Replace("StoreCode", "BrnchId").Replace("RegistrationNumber", "RegNo").Replace("PartitionKey", "ChassisNo");
                     }
                     catch (Exception e)
                     {
+                        InsertJobLog(chassisNumber, e.Message, logTable);
                         return new HttpResponseMessage(HttpStatusCode.BadGateway)
                         {
                             Content = new StringContent(e.Message)
                         };
                     }
+                    if (jsonResult != string.Empty)
+                    {
+                        InsertJobLog(chassisNumber, "Success", logTable);
+                    }
+                    else
+                    {
+                        InsertJobLog(chassisNumber, "No Data", logTable);
+                    }
+                    
                     return new HttpResponseMessage(HttpStatusCode.OK)
                     {
                         Content = new StringContent(jsonResult, Encoding.UTF8, "application/json")
@@ -88,7 +110,8 @@ namespace re_platform_fapp_adls_getjobcardhistory
                 }
                 else
                 {
-                    return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                    
+                     return new HttpResponseMessage(HttpStatusCode.BadRequest)
                     {
                         Content = new StringContent("Invalid Chassis Number")
                     };
@@ -103,7 +126,22 @@ namespace re_platform_fapp_adls_getjobcardhistory
             }
         }
 
+        private static void InsertJobLog(string chassisno, string message, CloudTable table)
+        {
+            var newEntity = new HistoryJobLogs
+            {
+                PartitionKey = chassisno,
+                RowKey = Guid.NewGuid().ToString(),
+                Status = message
+            };
+
+            TableOperation insert = TableOperation.Insert(newEntity);
+            table.ExecuteAsync(insert);
+
+        }
     }
+
+
 
 
 }
